@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NINDEX</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    :root {
+      --bg: #1e1e2f;
+      --surface: #2b2c3f;
+      --surface-hover: #3a3b4f;
+      --text-primary: #f0f0f5;
+      --text-secondary: #a0a0b1;
+      --accent: #4e9af1;
+      --accent-hover: #6ab3ff;
+      --danger: #f14e4e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text-primary); font-family: 'Inter', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+    header { background: var(--surface); display: flex; align-items: center; justify-content: space-between; padding: 1rem; }
+    .logo { display: flex; align-items: center; gap: .5rem; font-weight: 600; }
+    .logo svg { width: 24px; height: 24px; fill: var(--accent); }
+    .actions { display: flex; align-items: center; gap: 1rem; }
+    .actions button, .actions img { background: transparent; border: none; cursor: pointer; color: var(--text-secondary); }
+    .actions img { width: 32px; height: 32px; border-radius: 50%; }
+    #app { flex: 1; display: flex; flex-direction: column; }
+    .view { flex: 1; display: none; flex-direction: column; padding: 2rem; }
+    .active { display: flex; }
+    .center { align-items: center; justify-content: center; }
+    h1 { font-size: 2rem; margin-bottom: 1rem; }
+    h2 .ninja-count { font-size: 0.7em; font-weight: 400; color: var(--text-secondary); }
+    p { color: var(--text-secondary); margin-bottom: 2rem; }
+    .btn { font-weight: 600; padding: .5rem 1rem; border: none; border-radius: .5rem; cursor: pointer; transition: background .2s; margin-left: 0.5rem }
+    .btn:first-child { margin-left: 0; } 
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary { background: var(--surface-hover); color: var(--text-primary); }
+    .btn-secondary:hover { background: var(--surface); }
+    .browse-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .browse-header > div { display: flex; align-items: center; } 
+    .filter-section { margin-bottom: 1rem; }
+    .filter-section h3 { margin-bottom: .5rem; font-size: .9rem; color: var(--text-secondary); }
+    .filters { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .tag { padding: .25rem .5rem; border: 1px solid var(--text-secondary); border-radius: 999px; cursor: pointer; font-size: .85rem; background: var(--surface); color: var(--text-primary); }
+    .tag.selected { background: var(--accent); color: #fff; }
+    .ninja-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 1rem; }
+    .ninja-card { background: var(--surface); padding: 1rem; border-radius: .5rem; position: relative; transition: transform 0.1s ease-out, border-top 0.1s ease-out; /* For drag-over effect */ }
+    .ninja-card[draggable="true"] { cursor: grab; }
+    .ninja-card.dragging { opacity: 0.4; border: 2px dashed var(--accent); cursor: grabbing; }
+    .ninja-card.drag-over-target { border-top: 3px solid var(--accent-hover); transform: translateY(-2px); }
+    .card-actions { position: absolute; top: .5rem; right: .5rem; display: flex; gap: .5rem; }
+    .card-actions button { background: transparent; border: none; cursor: pointer; color: var(--text-secondary); }
+    .ninja-tags { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .5rem; }
+    .form-section { margin-bottom: 1rem; }
+    .form-section h3 { font-size: .9rem; margin-bottom: .5rem; color: var(--text-secondary); }
+    input[type="text"] { width: 100%; padding: .5rem; border: 1px solid var(--text-secondary); border-radius: .5rem; background: var(--bg); color: var(--text-primary); margin-bottom: .5rem; }
+    .drop-zone { border: 2px dashed var(--text-secondary); padding: 1rem; text-align: center; border-radius: .5rem; cursor: pointer; margin-bottom: 1rem; }
+    .dragover { border-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo"><svg viewBox="0 0 24 24"><path d="M12 2l8 8-8 8-8-8z"/></svg><span>NINDEX</span></div>
+    <div class="actions">
+    </div>
+  </header>
+  <div id="app">
+    <div id="welcome" class="view center active">
+      <h1>Welcome to NINDEX</h1>
+      <p>Add your first ninja to get started</p>
+      <div>
+        <button class="btn btn-primary" id="addBtn">Add Ninja</button>
+        <button class="btn btn-secondary" id="browseBtn">Browse</button>
+      </div>
+    </div>
+    <div id="addView" class="view"></div>
+    <div id="browseView" class="view">
+      <div class="browse-header">
+        <h2>Your Ninjas <span id="ninjaCountDisplay" class="ninja-count">(Total: 0, Showing: 0)</span></h2>
+        <div>
+          <button class="btn btn-primary" id="addFromBrowse">Add Ninja</button>
+          <button class="btn btn-secondary" id="clearAllFilters">Clear All Filters</button>
+          <button class="btn btn-secondary" id="exportJsonBtn">Export JSON</button>
+          <input type="file" id="importJsonInput" accept=".json" style="display: none;">
+          <button class="btn btn-secondary" id="importJsonBtn">Import JSON</button>
+        </div>
+      </div>
+      <div id="filterContainer"></div>
+      <div class="ninja-list" id="list"></div>
+    </div>
+  </div>
+  <script>
+    const categories = {
+      Village: ['Leaf','Sand','Mist','Leaf Rogue','Sand Rogue','Mist Rogue'],
+      Masteries: ['Fire','Wind','Lightning','Earth','Water','Medical','Weapon','Taijutsu'],
+      Corp: ['Leaf ANBU','Sand ANBU','Hunter-nin','Akatsuki','12 Guardians','Puppet Brigade','7 Swordsmen','LMPF','SMPF','MMPF','Leaf Med Corp','Sand Med Corp','Mist Med Corp'],
+      Rank: ['Academy Student','Genin','Specialized Jonin','Chunin','Jonin','Kage','Hermit','Rogue Ninja']
+    };
+    const colors = {
+      Leaf: '#225522', Sand: '#c2a76b', Mist: '#333366', Water: '#5588cc', 
+      'Leaf Rogue':'#000000', 'Sand Rogue':'#000000', 'Mist Rogue':'#000000',
+      Fire:'#cc3333', Wind:'#33aa33', Lightning:'#cccc33', Earth:'#996633', Medical:'#33cccc', Weapon:'#bbbbbb', Taijutsu:'#aa6633',
+      default:'#000000'
+    };
+
+    let ninjas = JSON.parse(localStorage.getItem('ninjas')||'[]');
+    
+    let defaultFilters = { search:'', Village:new Set(), Masteries:new Set(), Corp:new Set(), Rank:new Set() };
+    let loadedFiltersState = JSON.parse(localStorage.getItem('nindexFiltersSettings'));
+    
+    let filters = { 
+        ...defaultFilters, // Spread default filter structure
+        sort: (loadedFiltersState && loadedFiltersState.sort) ? loadedFiltersState.sort : 'new',
+        // if you save other filter states (like selected tags), load them here
+    };
+    if (loadedFiltersState) { // Load specific filter sets if they exist
+        Object.keys(defaultFilters).forEach(key => {
+            if(key !== 'search' && loadedFiltersState[key]) { // search and sort handled separately
+                filters[key] = new Set(loadedFiltersState[key]);
+            } else if (key === 'search' && loadedFiltersState[key]) {
+                filters[key] = loadedFiltersState[key];
+            }
+        });
+    }
+
+
+    let currentEdit = null;
+    let draggedNinjaId = null; // For drag and drop
+
+    const welcome = document.getElementById('welcome'), addView = document.getElementById('addView'), browseView = document.getElementById('browseView');
+    const exportJsonBtn = document.getElementById('exportJsonBtn');
+    const importJsonBtn = document.getElementById('importJsonBtn');
+    const importJsonInput = document.getElementById('importJsonInput');
+    const ninjaCountDisplay = document.getElementById('ninjaCountDisplay');
+    let sortBtn; // Will be initialized in showBrowse
+
+    document.getElementById('addBtn').onclick = () => { toggleView(addView); showAddForm(); };
+    document.getElementById('browseBtn').onclick = () => { toggleView(browseView); showBrowse(); };
+    document.getElementById('addFromBrowse').onclick = () => { toggleView(addView); showAddForm(); };
+    document.getElementById('clearAllFilters').onclick = () => {
+      filters.search = '';
+      ['Village','Masteries','Corp','Rank'].forEach(c => filters[c].clear());
+      // filters.sort remains as is, or you could reset it to 'new' if desired:
+      // filters.sort = 'new'; 
+      // if(sortBtn) updateSortButtonText(); // Update button if sort is reset
+      saveFiltersState(); // Save cleared filters
+      showBrowse();
+    };
+
+    exportJsonBtn.onclick = () => {
+      const ninjasData = JSON.stringify(ninjas, null, 2); 
+      const blob = new Blob([ninjasData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'nindex_data.json';
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+    };
+
+    importJsonBtn.onclick = () => { importJsonInput.click(); };
+    importJsonInput.onchange = (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const importedData = JSON.parse(e.target.result);
+            if (Array.isArray(importedData) && (importedData.length === 0 || importedData.every(item => typeof item === 'object' && item !== null && 'id' in item && 'name' in item))) {
+              ninjas = importedData;
+              saveData(); // Saves ninjas
+              filters.sort = 'new'; // Reset sort to 'new' for imported data
+              saveFiltersState(); // Save updated sort state
+              showBrowse(); 
+              alert('Ninjas imported successfully!');
+            } else { alert('Invalid JSON file structure.'); }
+          } catch (error) { alert('Error parsing JSON file: ' + error.message); }
+          event.target.value = null; 
+        };
+        reader.onerror = () => { alert('Error reading file.'); event.target.value = null; };
+        reader.readAsText(file);
+      }
+    };
+
+    function toggleView(view) {
+      [welcome, addView, browseView].forEach(v => v.classList.remove('active'));
+      view.classList.add('active');
+    }
+
+    function saveData() { // Only saves ninjas array
+      localStorage.setItem('ninjas', JSON.stringify(ninjas));
+    }
+
+    function saveFiltersState() { // Saves filter settings including sort
+        const filterStatesToSave = { sort: filters.sort, search: filters.search };
+        ['Village','Masteries','Corp','Rank'].forEach(cat => {
+            filterStatesToSave[cat] = Array.from(filters[cat]); // Convert Sets to Arrays for JSON
+        });
+        localStorage.setItem('nindexFiltersSettings', JSON.stringify(filterStatesToSave));
+    }
+
+
+    const sortStates = ['new', 'alpha', 'manual'];
+    function updateSortButtonText() {
+        if (!sortBtn) return;
+        if (filters.sort === 'new') sortBtn.textContent = 'Sort: Recently Added';
+        else if (filters.sort === 'alpha') sortBtn.textContent = 'Sort: A-Z';
+        else if (filters.sort === 'manual') sortBtn.textContent = 'Sort: Custom';
+        else { // Default fallback if filters.sort is somehow invalid
+            filters.sort = 'new';
+            sortBtn.textContent = 'Sort: Recently Added';
+        }
+    }
+
+
+    function showBrowse() {
+      toggleView(browseView);
+      const fc = document.getElementById('filterContainer'); fc.innerHTML = '';
+      
+      const sSec = document.createElement('div'); sSec.className = 'filter-section';
+      const input = document.createElement('input');
+      input.type = 'text'; input.placeholder = 'Search...'; input.value = filters.search;
+      input.oninput = e => { filters.search = e.target.value; saveFiltersState(); renderBrowse(); };
+      
+      // Initialize sortBtn here if it's not already
+      if (!sortBtn) {
+          sortBtn = document.createElement('button');
+          sortBtn.className = 'btn btn-secondary';
+          sortBtn.onclick = () => {
+            let currentSortIndex = sortStates.indexOf(filters.sort);
+            currentSortIndex = (currentSortIndex + 1) % sortStates.length;
+            filters.sort = sortStates[currentSortIndex];
+
+            if (filters.sort === 'new') {
+                ninjas.sort((a,b) => (b.id||Date.now()) - (a.id||Date.now())); // Ensure IDs exist for sort
+            } else if (filters.sort === 'alpha') {
+                ninjas.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+            }
+            // For 'manual', ninjas array is not re-sorted here by button click.
+            // It relies on previous manual ordering or the order from 'new'/'alpha'.
+            saveData(); // Save the potentially re-sorted ninjas array
+            saveFiltersState(); // Save the new sort state
+            updateSortButtonText();
+            renderBrowse();
+          };
+      }
+      updateSortButtonText(); // Set initial text
+      sSec.append(input, sortBtn);
+      fc.appendChild(sSec);
+
+      Object.keys(categories).forEach(cat => {
+        const sec = document.createElement('div'); sec.className = 'filter-section';
+        const h3 = document.createElement('h3'); h3.textContent = cat; sec.appendChild(h3);
+        const wrap = document.createElement('div'); wrap.className = 'filters';
+        categories[cat].forEach(val => {
+          const t = document.createElement('div'); t.className = 'tag'; t.textContent = val;
+          styleTag(t, cat, val); // Uses global filters
+          t.onclick = () => {
+            if (filters[cat].has(val)) filters[cat].delete(val);
+            else filters[cat].add(val);
+            styleTag(t, cat, val); // Update this tag
+            saveFiltersState();
+            renderBrowse();
+          };
+          wrap.appendChild(t);
+        });
+        const clr = document.createElement('div'); clr.className = 'tag'; clr.textContent = 'Clear ' + cat;
+        clr.onclick = () => {
+          filters[cat].clear();
+          Array.from(wrap.children).forEach(el => {
+            if(categories[cat].includes(el.textContent)) styleTag(el, cat, el.textContent);
+          });
+          saveFiltersState();
+          renderBrowse();
+        };
+        wrap.appendChild(clr);
+        sec.appendChild(wrap); fc.appendChild(sec);
+      });
+      renderBrowse();
+    }
+
+    function renderBrowse() {
+      const list = document.getElementById('list'); list.innerHTML = '';
+      let results = ninjas.filter(n => {
+        const q = filters.search.toLowerCase();
+        if (q && !((n.name||'').toLowerCase().includes(q) || (n.guild||'').toLowerCase().includes(q))) return false;
+        return ['Village','Masteries','Corp','Rank'].every(cat => {
+          if (!filters[cat] || !filters[cat].size) return true; // check if filters[cat] is defined
+          const val = n[cat] || (cat==='Masteries'?[]:'');
+          if (cat === 'Masteries') return Array.isArray(val) ? [...filters[cat]].every(t => val.includes(t)) : false;
+          return Array.isArray(val) ? [...filters[cat]].every(t => val.includes(t)) : filters[cat].has(val);
+        });
+      });
+
+      // Sort results for display if not in 'manual' mode (ninjas array itself is the source of truth for order)
+      if (filters.sort === 'alpha') {
+          results.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      } else if (filters.sort === 'new') {
+          results.sort((a, b) => (b.id || Date.now()) - (a.id || Date.now()));
+      }
+      // If filters.sort === 'manual', results derived from ninjas.filter() will maintain the order of ninjas array.
+
+      ninjaCountDisplay.textContent = `(Total: ${ninjas.length}, Showing: ${results.length})`;
+
+      if (results.length === 0 && ninjas.length > 0) list.innerHTML = '<p>No ninjas match your current filters.</p>';
+      else if (ninjas.length === 0) list.innerHTML = '<p>No ninjas added yet. Click "Add Ninja" or import data.</p>';
+
+      results.forEach(n => {
+        const card = document.createElement('div'); card.className = 'ninja-card';
+        card.dataset.ninjaId = String(n.id); // For D&D
+        card.setAttribute('draggable', true); // Make card draggable
+        card.addEventListener('dragstart', handleDragStart);
+        card.addEventListener('dragenter', handleDragEnter);
+        card.addEventListener('dragover', handleDragOver);
+        card.addEventListener('dragleave', handleDragLeave);
+        card.addEventListener('drop', handleDrop);
+        card.addEventListener('dragend', handleDragEnd);
+
+        const actions = document.createElement('div'); actions.className = 'card-actions';
+        const eb = document.createElement('button'); eb.innerText = '✏️'; eb.title = 'Edit Ninja';
+        eb.onclick = () => { showAddForm(ninjas.findIndex(x=>x.id===n.id)); };
+        const db = document.createElement('button'); db.innerText = '🗑️'; db.title = 'Delete Ninja';
+        db.onclick = () => { if (confirm(`Delete ${n.name||'this ninja'}?`)) { ninjas = ninjas.filter(x=>x.id!==n.id); saveData(); renderBrowse(); }};
+        actions.append(eb, db); card.appendChild(actions);
+        
+        if (n.avatar) { 
+          const imgContainer = document.createElement('div'); imgContainer.style.width = '100%'; imgContainer.style.marginBottom = '8px';
+          const img = document.createElement('img'); img.src = n.avatar; 
+          img.style.width = '100%'; img.style.height = 'auto'; img.style.display = 'block'; img.style.borderRadius = '4px'; 
+          img.alt = n.name || 'Ninja Avatar';
+          imgContainer.appendChild(img); card.appendChild(imgContainer); 
+        }
+        const nameEl = document.createElement('h3'); nameEl.innerText = n.name || 'Unnamed Ninja'; card.appendChild(nameEl);
+        const guildEl = document.createElement('p'); guildEl.innerText = n.guild||'No Guild'; guildEl.style.color = 'var(--text-secondary)'; guildEl.style.fontSize = '0.9em'; card.appendChild(guildEl);
+        const wrap = document.createElement('div'); wrap.className = 'ninja-tags';
+        ['Village','Masteries','Corp','Rank'].forEach(cat => {
+          const vals = Array.isArray(n[cat])? n[cat] : [n[cat]].filter(Boolean);
+          vals.forEach(v => { if (!v) return; const t = document.createElement('div'); t.className='tag selected'; const bg = (cat==='Corp'||cat==='Rank')? '#333333' : (colors[v]||colors.default); t.style.background = bg; t.style.color='#fff'; t.style.borderColor=bg; t.innerText=v; wrap.appendChild(t);});
+        });
+        card.appendChild(wrap); list.appendChild(card);
+      });
+    }
+
+    // Drag and Drop Handlers
+    function handleDragStart(event) {
+        draggedNinjaId = event.target.dataset.ninjaId;
+        event.dataTransfer.setData('text/plain', draggedNinjaId);
+        event.target.classList.add('dragging');
+    }
+    function handleDragEnter(event) {
+        event.preventDefault(); // Necessary for drop to work
+        const targetCard = event.target.closest('.ninja-card');
+        if (targetCard && targetCard.dataset.ninjaId !== draggedNinjaId) {
+            targetCard.classList.add('drag-over-target');
+        }
+    }
+    function handleDragOver(event) {
+        event.preventDefault(); // Necessary for drop to work
+    }
+    function handleDragLeave(event) {
+        const targetCard = event.target.closest('.ninja-card');
+        if (targetCard) {
+            targetCard.classList.remove('drag-over-target');
+        }
+    }
+    function handleDrop(event) {
+        event.preventDefault();
+        const targetCard = event.target.closest('.ninja-card');
+        targetCard.classList.remove('drag-over-target');
+        const targetNinjaId = targetCard.dataset.ninjaId;
+
+        if (!draggedNinjaId || draggedNinjaId === targetNinjaId) return;
+
+        const draggedIndex = ninjas.findIndex(n => String(n.id) === String(draggedNinjaId));
+        const targetIndex = ninjas.findIndex(n => String(n.id) === String(targetNinjaId));
+
+        if (draggedIndex !== -1 && targetIndex !== -1) {
+            const [draggedItem] = ninjas.splice(draggedIndex, 1);
+            ninjas.splice(targetIndex, 0, draggedItem);
+            
+            filters.sort = 'manual';
+            saveData(); // Save new ninja order
+            saveFiltersState(); // Save new sort state
+            if(sortBtn) updateSortButtonText();
+            renderBrowse(); // Re-render with new order
+        }
+    }
+    function handleDragEnd(event) {
+        event.target.classList.remove('dragging');
+        // Clean up any remaining drag-over-target classes (belt-and-suspenders)
+        document.querySelectorAll('.ninja-card.drag-over-target').forEach(card => card.classList.remove('drag-over-target'));
+        draggedNinjaId = null;
+    }
+
+
+    function showAddForm(idx = null) {
+      // ... (showAddForm function remains largely the same as previous version)
+      // Ensure ninja.id is properly handled, using Date.now() for new ninjas.
+      // On save, call saveData() and saveFiltersState() if sort might have changed.
+      // For brevity, I'm omitting the full showAddForm here, assuming it's correct from before.
+      // Key part in saveBtn.onclick inside showAddForm:
+      // ...
+      // saveData(); 
+      // // if adding a new ninja might affect sort display preference (e.g. you want to see it at top/bottom)
+      // // you might want to set filters.sort = 'new'; or 'manual' based on where it's added.
+      // // For now, just saving filters as they are.
+      // saveFiltersState(); 
+      // toggleView(browseView); 
+      // showBrowse();
+      // ...
+      // (The existing showAddForm is mostly fine, just ensure Date.now() for IDs and saving logic)
+      toggleView(addView); currentEdit = idx; const ninja = idx!==null? ninjas[idx] : {};
+      addView.innerHTML = ''; 
+      const formWrapper = document.createElement('div'); 
+      formWrapper.style.maxWidth = '600px'; 
+      formWrapper.style.margin = '0 auto';
+
+      const pageTitle = document.createElement('h1');
+      pageTitle.textContent = idx !== null ? `Edit ${ninja.name || 'Ninja'}` : 'Add New Ninja';
+      pageTitle.style.textAlign = 'center';
+      addView.appendChild(pageTitle);
+
+      const form = document.createElement('div');
+      const bi = document.createElement('div'); bi.className='form-section';
+      bi.innerHTML = `<h3>Basic Info</h3>
+        <input type="text" id="inName" placeholder="Name (Required)" value="${ninja.name||''}" />
+        <input type="text" id="inGuild" placeholder="Guild" value="${ninja.guild||''}" />`;
+      form.appendChild(bi);
+      
+      const formFilters = { Village:new Set(), Masteries:new Set(), Corp:new Set(), Rank:new Set() };
+
+      Object.keys(categories).forEach(cat => {
+        const sec = document.createElement('div'); sec.className='form-section';
+        const h3 = document.createElement('h3'); h3.innerText = cat + (cat==='Masteries'? ' (select up to 2)': ' (select 1)'); sec.appendChild(h3);
+        const wrap = document.createElement('div'); wrap.className='filters';
+        
+        formFilters[cat].clear(); 
+        if (ninja[cat]) { 
+          (Array.isArray(ninja[cat])? ninja[cat] : [ninja[cat]]).forEach(v => {
+            if (categories[cat].includes(v)) formFilters[cat].add(v)
+          }); 
+        }
+
+        categories[cat].forEach(val => {
+          const t = document.createElement('div'); t.className='tag'; t.textContent = val;
+          const isSelected = formFilters[cat].has(val);
+          styleTag(t, cat, val, isSelected); 
+
+          t.onclick = () => {
+            if (cat==='Masteries') {
+              if (formFilters[cat].has(val)) {
+                formFilters[cat].delete(val);
+              } else {
+                if (formFilters[cat].size < 2) formFilters[cat].add(val);
+                else { alert('You can select a maximum of 2 masteries.'); return; }
+              }
+            } else { 
+              const currentlySelected = formFilters[cat].has(val);
+              formFilters[cat].clear();
+              if (!currentlySelected) formFilters[cat].add(val);
+            }
+            Array.from(wrap.children).forEach(el => {
+                const elVal = el.textContent;
+                if(categories[cat].includes(elVal)){ 
+                    styleTag(el, cat, elVal, formFilters[cat].has(elVal));
+                }
+            });
+          };
+          wrap.appendChild(t);
+        });
+        sec.appendChild(wrap); form.appendChild(sec);
+      });
+      const avatarSec = document.createElement('div'); avatarSec.className = 'form-section';
+      avatarSec.innerHTML = '<h3>Avatar</h3>';
+      const dz = document.createElement('div'); dz.className='drop-zone'; dz.innerText='Drag & Drop image or click (max 2MB)';
+      const inp = document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.style.display='none';
+      let avatar = ninja.avatar||'';
+      function upd() { dz.innerText = avatar? 'Image selected. Click to change.':'Drag & Drop image or click (max 2MB)'; }
+      ['dragenter','dragover'].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault(); dz.classList.add('dragover');}));
+      ['dragleave','drop'].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault(); dz.classList.remove('dragover');}));
+      dz.addEventListener('drop', e=>loadFile(e.dataTransfer.files[0])); dz.addEventListener('click', ()=>inp.click()); inp.addEventListener('change', ()=>loadFile(inp.files[0]));
+      function loadFile(f){ 
+        if(!f) return; 
+        if (f.size > 2 * 1024 * 1024) { 
+            alert('File is too large. Maximum size is 2MB.');
+            inp.value = ''; 
+            return;
+        }
+        const r = new FileReader(); 
+        r.onload = ()=>{ avatar=r.result; upd(); }; 
+        r.readAsDataURL(f); 
+      }
+      upd(); avatarSec.appendChild(dz); avatarSec.appendChild(inp); form.appendChild(avatarSec);
+      const btns = document.createElement('div'); btns.style.display='flex'; btns.style.gap='1rem'; btns.style.marginTop='2rem'; 
+      const saveBtn = document.createElement('button'); saveBtn.className='btn btn-primary'; saveBtn.innerText='Save Ninja';
+      const cancelBtn = document.createElement('button'); cancelBtn.className='btn btn-secondary'; cancelBtn.innerText='Cancel'; 
+      cancelBtn.onclick = ()=>{ 
+        Object.keys(formFilters).forEach(cat => formFilters[cat].clear());
+        toggleView(browseView); showBrowse(); 
+      };
+      btns.append(saveBtn, cancelBtn); form.appendChild(btns);
+      formWrapper.appendChild(form);
+      addView.appendChild(formWrapper);
+
+      saveBtn.onclick = () => {
+        const name = document.getElementById('inName').value.trim();
+        if (!name) {
+            alert('Name is required.');
+            document.getElementById('inName').focus();
+            return;
+        }
+        const guild = document.getElementById('inGuild').value.trim();
+        const obj = { 
+          id: ninja.id || Date.now(), 
+          name, guild,
+          Village: [...formFilters.Village][0]||'', Masteries:[...formFilters.Masteries],
+          Corp:[...formFilters.Corp][0]||'', Rank:[...formFilters.Rank][0]||'', 
+          avatar 
+        };
+        if(currentEdit!==null) ninjas[currentEdit]=obj; 
+        else {
+            ninjas.push(obj);
+            // If adding new, might want to switch to 'new' sort to see it easily
+            // Or if sort is 'manual', add to end (push does this) or beginning (unshift)
+            if (filters.sort === 'manual' && ninjas.length > 1) {
+                // If manual, new items are typically added to the end
+            } else { // For new/alpha or if not manual, sort might be reapplied or make it new
+                filters.sort = 'new'; // Default to show new item first
+            }
+        }
+        saveData(); 
+        saveFiltersState(); // Save sort preference
+        Object.keys(formFilters).forEach(cat => formFilters[cat].clear());
+        toggleView(browseView); 
+        showBrowse();
+      };
+    }
+
+    // Helper styleTag - updated to accept an optional isSelected state for form context
+    function styleTag(el, cat, val, isSelected) {
+      const sel = typeof isSelected === 'boolean' ? isSelected : (filters[cat] ? filters[cat].has(val) : false);
+      let bg;
+      if(cat==='Corp'||cat==='Rank') bg = sel ? '#333333' : 'var(--surface)';
+      else bg = sel ? (colors[val]||colors.default) : 'var(--surface)';
+      el.style.background = bg; el.style.color = sel? '#fff':'var(--text-primary)';
+      el.style.borderColor = sel? (cat==='Corp'||cat==='Rank' ? '#555555' : bg) : 'var(--text-secondary)';
+      el.classList.toggle('selected', sel);
+    }
+    
+    // Init
+    if (ninjas.length > 0 || filters.search || Object.values(filters).some(f => f instanceof Set && f.size > 0)) { 
+        showBrowse();
+    } else {
+        toggleView(welcome);
+    }
+
+  </script>
+</body>
+</html>
